@@ -149,12 +149,18 @@ def chart_applyable_fix(conn: sqlite3.Connection, out_path: Path) -> None:
     values = [pct[r][0] for r in ordered]
     colors = [COLORS[r] for r in ordered]
 
-    # Build per-bar annotation showing the breakdown
+    # Build per-bar annotation showing the breakdown. The two 0% reviewers
+    # (Seer, Cursor BugBot) need explanatory annotations or the chart reads
+    # as "missing data" rather than "this format isn't supported."
+    ZERO_NOTES = {
+        "seer":   "0%  (prose-only findings)",
+        "cursor": "0%  (prose + Cursor-IDE deep-link only)",
+    }
     annotations = []
     for r in ordered:
         e, d, s = pct[r]
         if e == 0:
-            annotations.append("0%")
+            annotations.append(ZERO_NOTES.get(r, "0%"))
         elif d > 0 and s > 0:
             annotations.append(f"{e:.1f}%  ({d:.0f}% diff, {s:.0f}% suggestion)")
         elif d > 0:
@@ -162,10 +168,10 @@ def chart_applyable_fix(conn: sqlite3.Connection, out_path: Path) -> None:
         else:
             annotations.append(f"{e:.1f}%  (all suggestion)")
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(11, 5))
     bars = ax.barh(labels, values, color=colors, edgecolor="white", linewidth=1.5)
-    ax.set_xlabel("% of findings with an applyable fix (diff or suggestion)")
-    ax.set_title("Applyable-fix coverage per reviewer (higher is better)", pad=15)
+    ax.set_xlabel("% of findings with an applyable fix in GitHub's UI")
+    ax.set_title("Applyable-fix coverage per reviewer — in GitHub (higher is better)", pad=15)
     ax.set_xlim(0, 100)
 
     for bar, ann in zip(bars, annotations):
