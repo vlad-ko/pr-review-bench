@@ -1,0 +1,25 @@
+# Local SQLite databases — do not commit
+db/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.python-version
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local working files
+*.log
+.env
+.env.local
