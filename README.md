@@ -22,6 +22,7 @@ There's nothing to install. Three files, Python stdlib only.
 Requirements:
 - Python 3.10+
 - The `gh` CLI, authenticated against the GitHub repo you want to ingest (`gh auth status` should show you're logged in)
+- (Optional, for `gen_charts.py` only) `matplotlib` — install with `pip install matplotlib` if you want to regenerate the PNG charts in [`data/charts/`](./data/charts). The ingester itself has no third-party dependencies.
 
 The SQLite database is created automatically on first run at `db/reviews.db` (relative to the working directory).
 
@@ -110,6 +111,31 @@ SELECT n_reviewers, COUNT(*) AS locations FROM (
   GROUP BY pr_number, file_path, line
 ) GROUP BY n_reviewers ORDER BY n_reviewers;
 ```
+
+## Generating charts
+
+A separate script renders the headline metrics as PNG charts suitable for blog posts, slide decks, or status reports:
+
+```bash
+pip install matplotlib       # one-time setup
+./gen_charts.py              # writes 6 PNGs to data/charts/
+./gen_charts.py --db /custom/path.db --out-dir /tmp/charts
+```
+
+The six charts:
+
+| File | What it shows |
+|---|---|
+| `findings_by_reviewer.png` | Pie chart: total findings per reviewer |
+| `fp_rate_by_reviewer.png` | False-positive rate per reviewer (lower is better) |
+| `applyable_fix_coverage.png` | % of findings with an applyable diff or suggestion |
+| `seer_fp_by_severity.png` | Seer's FP rate broken down by severity tier |
+| `reviewer_latency.png` | Mean time from commit push to first finding |
+| `reviewer_agreement.png` | How many reviewers agreed at the same file:line |
+
+Style: light theme, retina DPI, sans-serif fonts with safe fallbacks. Each chart computes its data live from the DB at render time, so re-running after a fresh ingest produces up-to-date PNGs.
+
+The pre-rendered versions from the original dataset live in [`data/charts/`](./data/charts).
 
 ## The reply protocol the verdict classifier expects
 
