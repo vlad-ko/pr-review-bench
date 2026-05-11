@@ -1,8 +1,8 @@
 # pr-review-bench
 
-A tiny SQLite-backed tool for benchmarking AI code reviewers against each other on real pull requests. Designed for teams running multiple AI reviewers in parallel (CodeRabbit, Sentry Seer, Greptile, Cursor Bug Bot, …) who want to answer the question marketing pages can't: *which one actually catches the bugs?*
+A tiny SQLite-backed tool for benchmarking AI code reviewers against each other on real pull requests. Designed for teams running multiple AI reviewers in parallel (CodeRabbit, Sentry Seer, Greptile, Cursor BugBot, …) who want to answer the question marketing pages can't: *which one actually catches the bugs?*
 
-This repo contains the ingester, the schema, and a sanitized export from the original 146-PR / 680-finding dataset described in the accompanying blog post: [*We Ran Four AI Code Reviewers on Every Pull Request for Three Weeks*](https://example.com/blog-post-url). The data lives in `data/` and is fully PII-stripped — anonymized PR IDs, no file paths, no comment bodies, no commit SHAs.
+This repo contains the ingester, the schema, and a sanitized export from the original 146-merged-PR / 679-finding / 446-review-event dataset described in the accompanying blog post: [*Best AI Code Reviewer in 2026?*](https://example.com/blog-post-url). The data lives in `data/` and is fully PII-stripped — anonymized PR IDs, no file paths, no comment bodies, no commit SHAs.
 
 ## What it does
 
@@ -118,11 +118,11 @@ A separate script renders the headline metrics as PNG charts suitable for blog p
 
 ```bash
 pip install matplotlib       # one-time setup
-./gen_charts.py              # writes 6 PNGs to data/charts/
+./gen_charts.py              # writes 7 PNGs to data/charts/
 ./gen_charts.py --db /custom/path.db --out-dir /tmp/charts
 ```
 
-The six charts:
+The seven charts:
 
 | File | What it shows |
 |---|---|
@@ -130,10 +130,11 @@ The six charts:
 | `fp_rate_by_reviewer.png` | False-positive rate per reviewer (lower is better) |
 | `applyable_fix_coverage.png` | % of findings with an applyable diff or suggestion |
 | `seer_fp_by_severity.png` | Seer's FP rate broken down by severity tier |
+| `high_severity_fp_cross_reviewer.png` | Top-tier severity FP rate across all four reviewers |
 | `reviewer_latency.png` | Mean time from commit push to first finding |
 | `reviewer_agreement.png` | How many reviewers agreed at the same file:line |
 
-Style: light theme, retina DPI, sans-serif fonts with safe fallbacks. Each chart computes its data live from the DB at render time, so re-running after a fresh ingest produces up-to-date PNGs.
+Style: light theme, retina DPI, sans-serif fonts with safe fallbacks. Each chart computes its data live from the DB at render time, scoped to merged PRs only (matches the CSV exports). Re-running after a fresh ingest produces up-to-date PNGs.
 
 The pre-rendered versions from the original dataset live in [`data/charts/`](./data/charts).
 
