@@ -209,6 +209,60 @@ def chart_seer_fp_by_severity(conn: sqlite3.Connection, out_path: Path) -> None:
     plt.close()
 
 
+def chart_high_severity_fp(conn: sqlite3.Connection, out_path: Path) -> None:
+    """Bar chart: FP rate at each reviewer's HIGHEST severity tier (high+critical
+    where available; "major" for the binary-severity reviewers).
+
+    The story: bug-prediction reviewers (Seer, Cursor) take more risk at the
+    top tier and pay a higher FP rate. Conservative reviewers (Greptile) stay
+    perfect. CodeRabbit's "critical" tier is small but noisier than its general
+    rate.
+    """
+    # Build the comparison rows by reviewer + severity bucket
+    queries = [
+        ("seer",         "high",     "Seer high"),
+        ("coderabbitai", "critical", "CodeRabbit critical"),
+        ("cursor",       "high",     "Cursor high"),
+        ("greptile",     "major",    "Greptile major (P1)"),
+    ]
+    data = []
+    for reviewer, severity, label in queries:
+        r = conn.execute("""
+            SELECT
+              SUM(v.verdict='false_positive'),
+              SUM(v.verdict IN ('valid_fixed','false_positive'))
+            FROM findings f LEFT JOIN verdicts v ON v.finding_id=f.id
+            WHERE f.reviewer=? AND f.severity=?
+        """, (reviewer, severity)).fetchone()
+        fp, total = r[0] or 0, r[1] or 0
+        pct = (100.0 * fp / total) if total else 0.0
+        data.append((label, reviewer, pct, total))
+
+    # Order: noisiest at bottom (sort DESCENDING; matplotlib barh flips bottom-up)
+    data.sort(key=lambda x: -x[2])
+    labels = [d[0] for d in data]
+    values = [d[2] for d in data]
+    counts = [d[3] for d in data]
+    colors = [COLORS[d[1]] for d in data]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bars = ax.barh(labels, values, color=colors, edgecolor="white", linewidth=1.5)
+    ax.set_xlabel("False-positive rate (%) at the reviewer's highest severity tier")
+    ax.set_title("Top-tier severity FP rate by reviewer (lower is better)", pad=15)
+    ax.set_xlim(0, max(values) * 1.3 if max(values) > 0 else 5)
+
+    for bar, v, n in zip(bars, values, counts):
+        ax.text(
+            bar.get_width() + 0.25,
+            bar.get_y() + bar.get_height() / 2,
+            f"{v:.1f}%  (n={n})",
+            va="center", fontsize=12, fontweight="bold",
+        )
+
+    plt.savefig(out_path)
+    plt.close()
+
+
 def chart_latency(conn: sqlite3.Connection, out_path: Path) -> None:
     """Horizontal bar chart: mean time-to-first-finding per reviewer."""
     rows = conn.execute("""
@@ -317,6 +371,7 @@ def main() -> int:
         ("fp_rate_by_reviewer.png", chart_fp_rate),
         ("applyable_fix_coverage.png", chart_applyable_fix),
         ("seer_fp_by_severity.png", chart_seer_fp_by_severity),
+        ("high_severity_fp_cross_reviewer.png", chart_high_severity_fp),
         ("reviewer_latency.png", chart_latency),
         ("reviewer_agreement.png", chart_agreement),
     ]
