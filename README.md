@@ -128,7 +128,7 @@ The seven charts:
 |---|---|
 | `findings_by_reviewer.png` | Pie chart: total findings per reviewer |
 | `fp_rate_by_reviewer.png` | False-positive rate per reviewer (lower is better) |
-| `applyable_fix_coverage.png` | % of findings with an applyable diff or suggestion |
+| `applyable_fix_coverage.png` | % of findings that ship a one-click fix in GitHub (diff or suggestion) |
 | `seer_fp_by_severity.png` | Seer's FP rate broken down by severity tier |
 | `high_severity_fp_cross_reviewer.png` | Top-tier severity FP rate across all four reviewers |
 | `reviewer_latency.png` | Mean time from commit push to first finding |

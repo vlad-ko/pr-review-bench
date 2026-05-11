@@ -170,8 +170,8 @@ def chart_applyable_fix(conn: sqlite3.Connection, out_path: Path) -> None:
 
     fig, ax = plt.subplots(figsize=(11, 5))
     bars = ax.barh(labels, values, color=colors, edgecolor="white", linewidth=1.5)
-    ax.set_xlabel("% of findings with an applyable fix in GitHub's UI")
-    ax.set_title("Applyable-fix coverage per reviewer — in GitHub (higher is better)", pad=15)
+    ax.set_xlabel("% of findings with a one-click fix in GitHub")
+    ax.set_title("How often does each reviewer ship a one-click fix?", pad=15)
     ax.set_xlim(0, 100)
 
     for bar, ann in zip(bars, annotations):
