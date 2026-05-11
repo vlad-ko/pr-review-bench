@@ -31,9 +31,16 @@ LABEL = {
     "coderabbitai":   "CodeRabbit",
     "seer":           "Sentry Seer",
     "greptile":       "Greptile",
-    "cursor":         "Cursor Bug Bot",
+    "cursor":         "Cursor BugBot",
 }
 ORDER = ["coderabbitai", "seer", "cursor", "greptile"]
+
+
+# SQL fragment: scope every chart query to MERGED PRs only, so the rendered
+# charts match the scope of the published CSV exports in data/. Findings on
+# open / closed-without-merge PRs are excluded — those aren't useful for the
+# "what did the reviewers say on shipped code?" story.
+MERGED_SCOPE = "f.pr_number IN (SELECT pr_number FROM prs WHERE state='MERGED')"
 
 
 def setup_style() -> None:
@@ -63,7 +70,7 @@ def setup_style() -> None:
 def chart_findings_pie(conn: sqlite3.Connection, out_path: Path) -> None:
     """Pie chart: total findings per reviewer."""
     rows = dict(conn.execute(
-        "SELECT reviewer, COUNT(*) FROM findings GROUP BY reviewer"
+        f"SELECT f.reviewer, COUNT(*) FROM findings f WHERE {MERGED_SCOPE} GROUP BY f.reviewer"
     ).fetchall())
     values = [rows[r] for r in ORDER]
     labels = [f"{LABEL[r]}\n({rows[r]})" for r in ORDER]
@@ -84,11 +91,12 @@ def chart_findings_pie(conn: sqlite3.Connection, out_path: Path) -> None:
 
 def chart_fp_rate(conn: sqlite3.Connection, out_path: Path) -> None:
     """Horizontal bar chart: false-positive rate per reviewer."""
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT f.reviewer,
                100.0 * SUM(v.verdict='false_positive') /
                NULLIF(SUM(v.verdict IN ('valid_fixed','false_positive')), 0) AS fp_pct
         FROM findings f LEFT JOIN verdicts v ON v.finding_id = f.id
+        WHERE {MERGED_SCOPE}
         GROUP BY f.reviewer
     """).fetchall()
     fp_by_reviewer = {r: (pct or 0) for r, pct in rows}
@@ -124,13 +132,13 @@ def chart_applyable_fix(conn: sqlite3.Connection, out_path: Path) -> None:
     overstate coverage by double-counting. The union figure is what readers care
     about: "what fraction of findings come with a one-click fix?"
     """
-    rows = conn.execute("""
-        SELECT reviewer,
+    rows = conn.execute(f"""
+        SELECT f.reviewer,
                100.0 * SUM(CASE WHEN body LIKE '%```diff%' OR body LIKE '%```suggestion%'
                                 THEN 1 ELSE 0 END) / COUNT(*) AS either_pct,
                100.0 * SUM(CASE WHEN body LIKE '%```diff%' THEN 1 ELSE 0 END) / COUNT(*) AS diff_pct,
                100.0 * SUM(CASE WHEN body LIKE '%```suggestion%' THEN 1 ELSE 0 END) / COUNT(*) AS sug_pct
-        FROM findings GROUP BY reviewer
+        FROM findings f WHERE {MERGED_SCOPE} GROUP BY f.reviewer
     """).fetchall()
     pct = {r: (e, d, s) for r, e, d, s in rows}
 
@@ -175,13 +183,13 @@ def chart_seer_fp_by_severity(conn: sqlite3.Connection, out_path: Path) -> None:
     sev_order = ["low", "medium", "high", "critical"]
     rows = {}
     for s in sev_order:
-        r = conn.execute("""
+        r = conn.execute(f"""
             SELECT
               SUM(v.verdict='valid_fixed'),
               SUM(v.verdict='false_positive'),
               SUM(v.verdict IN ('valid_fixed','false_positive'))
             FROM findings f LEFT JOIN verdicts v ON v.finding_id=f.id
-            WHERE f.reviewer='seer' AND f.severity=?
+            WHERE f.reviewer='seer' AND f.severity=? AND {MERGED_SCOPE}
         """, (s,)).fetchone()
         valid, fp, total = r
         pct = (100.0 * (fp or 0) / total) if total else 0.0
@@ -222,17 +230,17 @@ def chart_high_severity_fp(conn: sqlite3.Connection, out_path: Path) -> None:
     queries = [
         ("seer",         "high",     "Seer high"),
         ("coderabbitai", "critical", "CodeRabbit critical"),
-        ("cursor",       "high",     "Cursor high"),
+        ("cursor",       "high",     "Cursor BugBot high"),
         ("greptile",     "major",    "Greptile major (P1)"),
     ]
     data = []
     for reviewer, severity, label in queries:
-        r = conn.execute("""
+        r = conn.execute(f"""
             SELECT
               SUM(v.verdict='false_positive'),
               SUM(v.verdict IN ('valid_fixed','false_positive'))
             FROM findings f LEFT JOIN verdicts v ON v.finding_id=f.id
-            WHERE f.reviewer=? AND f.severity=?
+            WHERE f.reviewer=? AND f.severity=? AND {MERGED_SCOPE}
         """, (reviewer, severity)).fetchone()
         fp, total = r[0] or 0, r[1] or 0
         pct = (100.0 * fp / total) if total else 0.0
@@ -265,11 +273,12 @@ def chart_high_severity_fp(conn: sqlite3.Connection, out_path: Path) -> None:
 
 def chart_latency(conn: sqlite3.Connection, out_path: Path) -> None:
     """Horizontal bar chart: mean time-to-first-finding per reviewer."""
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         WITH first_finding AS (
             SELECT f.reviewer, f.commit_sha,
                    MIN(f.created_at) AS first_at, c.committed_at
             FROM findings f JOIN commits c ON c.sha = f.commit_sha
+            WHERE {MERGED_SCOPE}
             GROUP BY f.reviewer, f.commit_sha, c.committed_at
         )
         SELECT reviewer,
@@ -309,11 +318,11 @@ def chart_agreement(conn: sqlite3.Connection, out_path: Path) -> None:
     A pie was tempting but the 93/6/0.6 ratio crushes the small categories
     behind their labels. A bar handles the lopsided distribution cleanly.
     """
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         WITH coords AS (
             SELECT pr_number, file_path, line, COUNT(DISTINCT reviewer) AS n
-            FROM findings
-            WHERE file_path IS NOT NULL AND line IS NOT NULL
+            FROM findings f
+            WHERE file_path IS NOT NULL AND line IS NOT NULL AND {MERGED_SCOPE}
             GROUP BY pr_number, file_path, line
         )
         SELECT n, COUNT(*) FROM coords GROUP BY n ORDER BY n
